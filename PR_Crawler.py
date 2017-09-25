@@ -1,4 +1,5 @@
 import urllib2, htmllib, Queue, sets, sys, fileinput, heapq
+from urlparse import urlparse
 import json
 import re
 import MyUrl
@@ -30,9 +31,10 @@ class PR_Crawler:
             page_to_crawl = crawl_queue[0].url
             if page_to_crawl not in crawled_set:
                 try:
-                    print "\nCrawling page" + page_to_crawl + "No:" + str(count)
+                    print "\nCrawling page " + page_to_crawl + " No:" + str(count)
                     links = PR_Crawler.get_links(count, page_to_crawl)
                     print "\nFinishing crawling pages"
+                    print "\nThere are " + str(len(links)) + " page"
                     crawl_queue[0].links = links
                     for link in links:
                         url_link = MyUrl.MyUrl(link)
@@ -115,14 +117,16 @@ class PR_Crawler:
     # This method is used to parser html to get hyperlinks
     @staticmethod
     def get_links(count, url):
-        print url
         links = sets.Set()
         html_page = PR_Crawler.retrieve_url(url)
         PR_Crawler.write_html_to_file(count, html_page)
         soup = BeautifulSoup(html_page, "lxml")
         for link in soup.findAll('a', attrs={'href': re.compile("^http")}):
             links.add(link.get('href'))
-            print link.get('href')
+            # parsed_uri = urlparse(link.get('href'))
+            # domain = '{uri.scheme}://{uri.netloc}/'.format(uri=parsed_uri)
+            # print domain + "\n"
+            # print link.get('href')
         return links
 
     # This method is used to download the html pages to files
@@ -145,7 +149,6 @@ class PR_Crawler:
             for link in url.links:
                 if link in index:
                     g[index[url.url], index[link]] = 1
-
         page_ranks = PR_Crawler.page_rank(g)
         count2 = 0
         for url in crawl_queue:
