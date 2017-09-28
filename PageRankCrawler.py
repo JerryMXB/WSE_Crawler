@@ -1,5 +1,7 @@
-import urllib2, htmllib, sys, fileinput, heapq
+import urllib2
+import sys
 from urlparse import urlparse
+from urlparse import urljoin
 import json
 import re
 import MyUrl
@@ -12,11 +14,15 @@ from datetime import datetime
 from collections import deque
 
 
-class PageRank_Crawler:
-    def __init__(self):
-        self.hello = "The PageRank Crawler starts.\n"
-        self.keyword = "knuckle+sandwichd"
+class PageRankCrawler:
+    def __init__(self, keyword="nyu"):
+        # ================= Configuration ===============
+        self.keyword = keyword
         self.num = 10
+        self.site_limit_num = 50
+        # ===============================================
+
+        self.hello = "The PageRank Crawler starts.\n"
         self.iterate = 0
         self.page_record = {}
         self.count = 0
@@ -24,7 +30,6 @@ class PageRank_Crawler:
         self.page_rank_round = 0
         self.auditor = Auditor.Auditor()
         self.site_limit = {}
-        self.site_limit_num = 50
 
     def start(self):
         self.auditor.start_time = datetime.now()
@@ -41,7 +46,7 @@ class PageRank_Crawler:
             self.index += 1
 
         # The Maximum number of pages to crawl
-        while self.count < 1000:
+        while self.count < 300:
             round_count = 0
             cur_members = len(self.page_record)
 
@@ -121,6 +126,7 @@ class PageRank_Crawler:
             print "This is " + str(self.page_rank_round) + " round"
             self.page_rank_round += 1
             self.set_page_rank(self.page_record)
+            crawl_queue.clear()
             for url in self.page_record:
                 if url not in crawled_set and self.is_site_limit(url):
                     crawl_queue.append(self.page_record[url])
@@ -151,6 +157,14 @@ class PageRank_Crawler:
                     return ""
         else:
             print "This page is robot excluded."
+
+    # This method is used to test whether the url is in blacklist
+    def black_list(self, url):
+        blacklist = ['.jpg', '.cgi', '.pdf']
+        for extention in blacklist:
+            if url.endswith(extention):
+                return False
+        return True
 
     # This method is used to tell whether we are allowed to crawl a page or not
     def is_url_robot_excluded(self, search_url, user_agent):
@@ -206,7 +220,6 @@ class PageRank_Crawler:
 
     # This method is used to parser html to get hyperlinks
     def get_links(self, count, url):
-        # print url
         links = set()
         html_page = self.retrieve_url(url)
         if html_page:
@@ -214,7 +227,20 @@ class PageRank_Crawler:
             soup = BeautifulSoup(html_page, "lxml")
             for link in soup.findAll('a', attrs={'href': re.compile("^http")}):
                 links.add(link.get('href'))
-                # print link.get('href')
+            return links
+        else:
+            return links
+
+    # This method is used to parser html to get hyperlinks including relative links
+    def get_related_links(self, count, url):
+        links = set()
+        html_page = self.retrieve_url(url)
+        if html_page:
+            self.write_html_to_file(count, html_page)
+            soup = BeautifulSoup(html_page, "lxml")
+            for link in soup.findAll('a'):
+                new_link = urljoin(url, link.get('href'))
+                links.add(new_link)
             return links
         else:
             return links
