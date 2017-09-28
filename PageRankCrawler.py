@@ -3,24 +3,32 @@ from urlparse import urlparse
 import json
 import re
 import MyUrl
+import Auditor
+import CrawlRecord
 from bs4 import BeautifulSoup
 import numpy as np
 import robotparser
+from datetime import datetime
 from collections import deque
 
 
 class PageRank_Crawler:
     def __init__(self):
         self.hello = "The PageRank Crawler starts.\n"
-        self.keyword = "youtube"
+        self.keyword = "knuckle+sandwichd"
         self.num = 10
         self.iterate = 0
         self.page_record = {}
         self.count = 0
         self.index = 0
         self.page_rank_round = 0
+        self.auditor = Auditor.Auditor()
+        self.site_limit = {}
+        self.site_limit_num = 50
 
     def start(self):
+        self.auditor.start_time = datetime.now()
+
         print self.hello + "The keyword is: " + self.keyword + ".\nNumber of start page is: " + str(self.num) + ".\n"
 
         crawl_queue = deque()
@@ -36,23 +44,33 @@ class PageRank_Crawler:
         while self.count < 1000:
             round_count = 0
             cur_members = len(self.page_record)
+
             if self.count < 100:
                 print "Initialing crawling"
             else:
-                print "Going to crawl :" + str(int(cur_members * 0.1))
+                print "Going to crawl :" + str(int(cur_members * 0.05))
+
             while len(crawl_queue) > 0:
-                if self.count > 100 and round_count > int(cur_members * 0.1):
+
+                if self.count > 100 and round_count > int(cur_members * 0.05):
                     break
                 page_to_crawl = crawl_queue.popleft()
+
                 if page_to_crawl.url not in crawled_set:
                     try:
+                        # Auditing
+                        crawl_record = CrawlRecord.CrawlRecord()
+                        crawl_record.url = page_to_crawl.url
+                        crawl_record.page_rank = page_to_crawl.page_rank
+                        crawl_record.num = self.count
+                        crawl_record.time = datetime.now()
+
                         print str(self.count) + " Crawling page -> " + \
                               page_to_crawl.url + " index: " + str(page_to_crawl.index)
                         links = self.get_links(self.count, page_to_crawl.url)
                         print "Number of links: " + str(len(links))
                         print "Page Rank: " + str(page_to_crawl.page_rank) + \
                               ". I am No." + str(round_count) + " in this run"
-
                         neighbors = []
                         for link in links:
                             if link not in self.page_record:
@@ -62,12 +80,21 @@ class PageRank_Crawler:
                             else:
                                 neighbors.append(self.page_record[link].index)
                         self.page_record[page_to_crawl.url].neighbors = neighbors
+
+                        crawl_record.code = 200
+                        self.auditor.crawl_record[self.count] = crawl_record
                         # Mark this page as crawled
                         crawled_set.add(page_to_crawl.url)
                         self.count += 1
                     except urllib2.HTTPError as err:
                         self.count += 1
                         crawled_set.add(page_to_crawl.url)
+
+                        # Auditing
+                        self.auditor.count_error_code += 1
+                        crawl_record.code = str(err.code)
+                        self.auditor.crawl_record[self.count] = crawl_record
+
                         print "Error code: " + str(err.code)
                         pass
                     except urllib2.URLError as err:
@@ -77,9 +104,10 @@ class PageRank_Crawler:
                         pass
                     except:
                         print "Failed to get links from this page: ", sys.exc_info()[0], sys.exc_info()[1]
+                        self.count += 1
                         # Mark this page as crawled
                         crawled_set.add(page_to_crawl.url)
-                        raise
+                        pass
                     finally:
                         round_count += 1
                         print "\n"
@@ -94,34 +122,64 @@ class PageRank_Crawler:
             self.page_rank_round += 1
             self.set_page_rank(self.page_record)
             for url in self.page_record:
-                if url not in crawled_set:
+                if url not in crawled_set and self.is_site_limit(url):
                     crawl_queue.append(self.page_record[url])
             crawl_queue = deque(sorted(crawl_queue))
+            print "Queue Size is: " + str(len(crawl_queue))
+
+        self.auditor.page_record = self.page_record
+        self.auditor.site_limit = self.site_limit
+        self.auditor.end_time = datetime.now()
+        self.auditor.write_summary()
 
     # This method is used to retrieve html page
     def retrieve_url(self, search_url):
         user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.7) Gecko/2009021910 Firefox/3.0.7'
         if self.is_url_robot_excluded(search_url, user_agent):
-            headers = {'User-Agent': user_agent, }
-            request = urllib2.Request(search_url, None, headers)
-            response = urllib2.urlopen(request)
-            print "Status code: " + str(response.getcode())
-            if response.info().type == "text/html":
-                html = response.read()
-                return html
-            else:
-                print "This is not a html. It is: " + response.info().type
-                return ""
+            if self.is_site_limit(search_url):
+                headers = {'User-Agent': user_agent, }
+                request = urllib2.Request(search_url, None, headers)
+                response = urllib2.urlopen(request, None, 5)
+                self.auditor.count_200 += 1
+                print "Status code: " + str(response.getcode())
+                if response.info().type == "text/html":
+                    html = response.read()
+                    print "The page size:" + str(response.info().getheaders("Content-Length"))
+                    return html
+                else:
+                    print "This is not a html. It is: " + response.info().type
+                    return ""
         else:
             print "This page is robot excluded."
 
+    # This method is used to tell whether we are allowed to crawl a page or not
     def is_url_robot_excluded(self, search_url, user_agent):
+        try:
+            parsed_uri = urlparse(search_url)
+            domain = '{uri.scheme}://{uri.netloc}/'.format(uri=parsed_uri)
+            rp = robotparser.RobotFileParser()
+            rp.set_url(domain + "/robots.txt")
+            rp.read()
+            if not rp.can_fetch(user_agent, search_url):
+                self.auditor.count_robot_excluded += 1
+            return rp.can_fetch(user_agent, search_url)
+        except:
+            return True
+
+    # This method is used to limit number of page can crawl
+    def is_site_limit(self, search_url):
         parsed_uri = urlparse(search_url)
         domain = '{uri.scheme}://{uri.netloc}/'.format(uri=parsed_uri)
-        rp = robotparser.RobotFileParser()
-        rp.set_url(domain + "/robots.txt")
-        rp.read()
-        return rp.can_fetch(user_agent, search_url)
+        if domain not in self.site_limit:
+            self.site_limit[domain] = 1
+            return True
+        else:
+            if self.site_limit[domain] > self.site_limit_num:
+                # print "Domain:" + domain + " reaches limit"
+                return False
+            else:
+                self.site_limit[domain] += 1
+                return True
 
     # This method is used to get start pages by calling google RESTful custom search api
     def get_start_pages(self, keyword, num):
@@ -163,10 +221,11 @@ class PageRank_Crawler:
 
     # This method is used to download the html pages to files
     def write_html_to_file(self, count, html):
-        f = open('html_files/000' + str(count / 10) + '.txt', "a")
+        f = open('html_files/PR000' + str(count / 10) + '.txt', "a")
         f.write(html)
         f.close()
 
+    # This method to set page rank into page_record
     def set_page_rank(self, page_record):
         # forming adjacency matrix
         g = np.zeros(shape=(len(page_record), len(page_record)), dtype=np.float)
@@ -179,13 +238,14 @@ class PageRank_Crawler:
                 # for leaks assume it has link to everyone
                 num_links = 1.0 / len(page_record)
                 g[page_record[url].index, :] = num_links
-        print g
+        # print g
         page_ranks = self.page_rank(g)
         print page_ranks
         for url in page_record:
             page_record[url].page_rank = page_ranks[page_record[url].index]
         return page_record
 
+    # This method is used to calculate page rank
     def page_rank(self, g, s=0.85):
         n = g.shape[0]
         pr0 = (1.0 / n) * np.ones(n)
