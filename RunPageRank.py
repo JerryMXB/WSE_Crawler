@@ -4,5 +4,5 @@ import PageRankCrawler
 #
 # 2. knuckle sandwich
 
-pr_crawler = PageRankCrawler.PageRankCrawler("knuckle+sandwich")
+pr_crawler = PageRankCrawler.PageRankCrawler("ebbets+field")
 pr_crawler.start()
