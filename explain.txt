@@ -1,0 +1,21 @@
+1. BFS Crawler
+
+My BFS Crawler is a standard BFS crawler. It will call google search api to get a couple of pages to get started and then
+get started. It starts at the start page and explores the neighbor nodes first, before moving to the next level neighbours.
+By exploring a node, it will first do some checking to see whether this node is valid or not, the checking including:
+
+- Url blacklist checking, if a url ends with the extension in the blacklist (.pdf, .jpg). It will be parsed.
+- MIME checking. Only Content-type equals "text/html" will be crawled.
+- Robot Exclusion Protocol to avoid going into areas that are off-limits
+- Site limit, only crawler 50 pages from the same site
+
+Only after checking and find out this page is a valid url, then it will try to crawler this page. If urlopen this page returns
+http code other than 200, this crawler will end and the auditor will keep track of this failed crawl.
+
+If the http code is 200, it will first download the page into local directory. Then parse the url inside this pages including
+doing url join for the relative url. These url will be enqueued.
+
+The crawler will stop if it has crawler 1000 pages or the queue is empty. When the crawler, it will calculate the pageRank
+for the pages that has tried to crawl.
+
+
