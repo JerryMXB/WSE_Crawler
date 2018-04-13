@@ -46,7 +46,7 @@ class PageRankCrawler:
             self.index += 1
 
         # The Maximum number of pages to crawl
-        while self.count < 300:
+        while self.count < 1000:
             round_count = 0
             cur_members = len(self.page_record)
 
@@ -225,8 +225,13 @@ class PageRankCrawler:
         if html_page:
             self.write_html_to_file(count, html_page)
             soup = BeautifulSoup(html_page, "lxml")
+            num_links = 0
             for link in soup.findAll('a', attrs={'href': re.compile("^http")}):
-                links.add(link.get('href'))
+                if num_links < 30:
+                    links.add(link.get('href'))
+                    num_links += 1
+                else:
+                    break
             return links
         else:
             return links

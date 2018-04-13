@@ -208,8 +208,13 @@ class BFSCrawler:
         if html_page:
             self.write_html_to_file(count, html_page)
             soup = BeautifulSoup(html_page, "lxml")
+            num_links = 0
             for link in soup.findAll('a', attrs={'href': re.compile("^http")}):
-                links.add(link.get('href'))
+                if num_links < 30:
+                    links.add(link.get('href'))
+                    num_links += 1
+                else:
+                    break
                 # print link.get('href')
             return links
         else:

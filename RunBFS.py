@@ -5,5 +5,5 @@ import BFSCrawler
 #
 # 2. knuckle sandwich
 
-bsfCrawler = BFSCrawler.BFSCrawler("knuckle+sandwich")
+bsfCrawler = BFSCrawler.BFSCrawler("ebbets+field")
 bsfCrawler.start()
