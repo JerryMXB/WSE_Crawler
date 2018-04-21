@@ -19,7 +19,6 @@ doing url join for the relative url. These url will be enqueued.
 The crawler will stop if it has crawler 1000 pages or the queue is empty. When the crawler, it will calculate the pageRank
 for the pages that has tried to crawl. And write the summary information in the Auditor to a file.
 
-=============================================================================================================================
 
 ## Page Rank Crawler
 
